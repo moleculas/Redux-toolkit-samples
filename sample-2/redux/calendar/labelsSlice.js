@@ -1,0 +1,111 @@
+import { createAsyncThunk, createEntityAdapter, createSlice } from '@reduxjs/toolkit';
+import axios from 'axios';
+import _ from '@lodash';
+
+//importación acciones
+import { showMessage } from 'app/redux/fuse/messageSlice';
+
+export const getLabels = createAsyncThunk(
+  'calendarApp/labels/getLabels',
+  async (_, { getState, dispatch }) => {
+    const user = getState().user;
+    try {
+      const response = await axios.get('/api/calendar/labels/' + user.data.id);
+      const data = await response.data;
+      return data;
+    } catch (err) {
+      dispatch(showMessage({ message: err.response.data.message, variant: "error" }));
+      return;
+    };
+  });
+
+export const addLabel = createAsyncThunk(
+  'calendarApp/labels/addLabel',
+  async (newLabel, { getState, dispatch }) => {
+    const user = getState().user;
+    const formData = new FormData();
+    const losDatos = { ...newLabel, usuario: user.data.id };
+    formData.append("datos", JSON.stringify(losDatos));
+    try {
+      const response = await axios.post('/api/calendar/labels', formData);
+      const data = await response.data;
+      return data;
+    } catch (err) {
+      dispatch(showMessage({ message: err.response.data.message, variant: "error" }));
+      return;
+    };
+  });
+
+export const updateLabel = createAsyncThunk(
+  'calendarApp/labels/updateLabel',
+  async (label, { getState, dispatch }) => {
+    const formData = new FormData();
+    const losDatos = label;
+    formData.append("datos", JSON.stringify(losDatos));
+    try {
+      const response = await axios.put(`/api/calendar/labels/${label.id}`, formData);
+      const data = await response.data;
+      return data;
+    } catch (err) {
+      dispatch(showMessage({ message: err.response.data.message, variant: "error" }));
+      return;
+    };
+  });
+
+export const removeLabel = createAsyncThunk(
+  'calendarApp/labels/removeLabel',
+  async (labelId, { dispatch }) => {
+    try {
+      const response = await axios.delete(`/api/calendar/labels/${labelId}`);
+      const data = await response.data;
+      dispatch(showMessage({ message: data.message, variant: "success" }));
+      return data;
+    } catch (err) {
+      dispatch(showMessage({ message: err.response.data.message, variant: "error" }));
+      return;
+    };
+  });
+
+const labelsAdapter = createEntityAdapter({});
+
+export const {
+  selectAll: selectLabels,
+  selectIds: selectLabelIds,
+  selectById: selectLabelById,
+} = labelsAdapter.getSelectors((state) => state.calendarApp.labels);
+
+const labelsSlice = createSlice({
+  name: 'calendarApp/labels',
+  initialState: labelsAdapter.getInitialState({
+    selectedLabels: [],
+    labelsDialogOpen: false,
+  }),
+  reducers: {
+    toggleSelectedLabels: (state, action) => {
+      state.selectedLabels = _.xor(state.selectedLabels, [action.payload]);
+    },
+    openLabelsDialog: (state, action) => {
+      state.labelsDialogOpen = true;
+    },
+    closeLabelsDialog: (state, action) => {
+      state.labelsDialogOpen = false;
+    },
+  },
+  extraReducers: {
+    [getLabels.fulfilled]: (state, action) => {
+      labelsAdapter.setAll(state, action.payload);
+      state.selectedLabels = action.payload.map((item) => item.id);
+    },
+    [addLabel.fulfilled]: labelsAdapter.addOne,
+    [updateLabel.fulfilled]: labelsAdapter.upsertOne,
+    [removeLabel.fulfilled]: labelsAdapter.removeOne,
+  },
+});
+
+export const selectSelectedLabels = ({ calendarApp }) => calendarApp.labels.selectedLabels;
+export const selectFirstLabelId = ({ calendarApp }) => calendarApp.labels.ids[0];
+export const selectLabelsDialogOpen = ({ calendarApp }) => calendarApp.labels.labelsDialogOpen;
+
+export const { toggleSelectedLabels, openLabelsDialog, closeLabelsDialog } = labelsSlice.actions;
+
+export default labelsSlice.reducer;
